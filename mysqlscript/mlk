@@ -1,0 +1,2 @@
+查询medata lock的会话
+select object_schema,object_name,waiting_pid,waiting_account,waiting_query,waiting_query_secs,blocking_pid,blocking_account,sql_kill_blocking_connection from sys.schema_table_lock_waits a where (a.blocking_thread_id,a.blocking_pid,a.blocking_account) not in (select waiting_thread_id,waiting_pid,waiting_account from sys.schema_table_lock_waits b);

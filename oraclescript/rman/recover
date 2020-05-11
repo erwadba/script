@@ -94,7 +94,7 @@ run {
  run {
    allocate channel ch01 TYPE 'SBT_TAPE';
    allocate channel ch02 TYPE 'SBT_TAPE';
-   SEND 'NB_ORA_SERV=ntbbkp05,NB_ORA_CLIENT=lxbedirac2';
+   SEND 'NB_ORA_SERV=nbu_server05,NB_ORA_CLIENT=lxt03_host';
    recover database;
    release channel ch01;
    release channel ch02;

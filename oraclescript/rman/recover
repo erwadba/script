@@ -1,0 +1,20 @@
+还原过程大致步骤：
+1、还原spfile，适当修改spfile的参数
+restore spfile to '/home/oracle/PROD.ora' from '/vdb/2020_05_11/spfile_19477_1_1040086879';
+2、还原控制文件
+restore controlfile to '/vdb/app/oracle/oradata/control01.ctl' from '/vdb/2020_05_11/cntrl_19475_1_1040086875';
+3、还原数据库
+ run {
+ SET NEWNAME FOR DATABASE TO '/vdb/app/oracle/oradata/%U';
+ restore database from tag='HOT_DB_BK_LEVEL0_2020_05_10';
+ }
+4、switch datafile
+ run {
+ SET NEWNAME FOR DATABASE TO '/vdb/app/oracle/oradata/%U';
+ switch datafile all;
+ }
+
+5、追加增量日志
+recover database;
+6、打开数据库
+

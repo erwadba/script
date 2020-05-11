@@ -1,0 +1,17 @@
+表空间的使用率(11g)
+select tablespace_name,
+       trunc(used_space * 8 / 1024 / 1024, 2) used_G,
+       trunc(tablespace_size * 8 / 1024 / 1024, 2) allocated_G,
+       trunc((tablespace_size-used_space)*8/1024/1024,2) free_G,
+	 round(USED_PERCENT,2)||'%' USE_PER
+  from dba_tablespace_usage_metrics order by USED_PERCENT desc;
+
+表空间的使用率(12c)
+select pdb.PDB_NAME,
+       TABLESPACE_NAME,
+       to_char(trunc((TABLESPACE_SIZE - USED_SPACE) * 8 / 1024 / 1024)) "UN_G",
+       to_char(trunc(USED_PERCENT)) "PER"
+  from cdb_tablespace_usage_metrics t, cdb_pdbs pdb
+ where t.CON_ID = pdb.PDB_ID
+   and t.TABLESPACE_NAME not in ('UNDOTBS1', 'UNDOTBS2', 'TEMP');
+

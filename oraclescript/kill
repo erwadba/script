@@ -1,0 +1,53 @@
+单实例杀进程的方法（查找某张表上的锁）
+
+ SELECT se.USERNAME,se.SCHEMANAME,se.MACHINE,se.MODULE,'ALTER SYSTEM KILL SESSION ' || '''' || se.sid || ',' || se.serial# || '''' ||
+        ' immediate;' kill_stat
+   FROM V$SESSION se, V$LOCK lk, DBA_OBJECTS obj
+  where se.sid = lk.SID
+    and lk.ID1 = obj.OBJECT_ID
+  and OBJECT_NAME = trim(upper('&object_name'));
+
+
+RAC的杀进程的方法（查找某张表上的锁）
+
+ SELECT username,
+        schemaname,se.MACHINE,se.MODULE,
+        'ALTER SYSTEM KILL SESSION ' || '''' || se.sid || ',' || se.serial# || ',' || '@' ||
+        se.inst_id || '''' || ' immediate;' kill_stat
+   FROM GV$SESSION se, GV$LOCK lk, DBA_OBJECTS obj
+  where se.INST_ID = lk.INST_ID
+    and se.SID = lk.SID
+    and lk.ID1 = obj.OBJECT_ID
+    and OBJECT_NAME = trim(upper('&object_name'));
+
+应急处理系统的kill session阻塞会话
+gv$sessoin_blocker能查不到数据的时候。   
+ SELECT se.username,
+        schemaname,se.MACHINE,se.MODULE,
+        'ALTER SYSTEM KILL SESSION ' || '''' || se.sid || ',' || se.serial# || ',' || '@' ||
+        se.inst_id || '''' || ' immediate;' kill_stat,p.pid,p.SPID,p.PROGRAM
+   FROM GV$SESSION se,gv$lock lk,gv$process p
+   where se.INST_ID=lk.INST_ID
+   and se.PADDR=p.ADDR
+   and se.SID=lk.sid
+   and se.INST_ID=p.INST_ID
+   and lk.BLOCK=1;
+
+
+gv$sessoin_blocker能查到数据的时候。
+select distinct 'ALTER SYSTEM KILL SESSION ' || '''' || c.sid || ',' || c.serial# || ',' || '@' ||
+       c.inst_id || '''' ||
+       ' immediate;',
+       c.username,c.schemaname,c.EVENT,c.STATE,c.P1TEXT||','||c.P2TEXT||','||c.P3TEXT p123text,c.p1||','||c.p2||','||c.p3 p123,c.P1RAW||','||c.P2RAW||','||c.P3RAW p123raw
+  from gv$session_blockers b,gv$session c
+  where c.INST_ID=b.BLOCKER_INSTANCE_ID and c.sid=b.BLOCKER_SID and c.SERIAL#=b.BLOCKER_SESS_SERIAL#
+  and not exists
+ (select 1
+          from gv$session_blockers a
+         where b.BLOCKER_INSTANCE_ID = a.INST_ID
+           and b.BLOCKER_SID=a.SID
+           and b.BLOCKER_SESS_SERIAL# = a.SESS_SERIAL#)
+
+
+
+	   

@@ -1,0 +1,27 @@
+dgmgrl cmd 
+1.stop delete archivelog on standby  （crontab）
+2.switch use dgmgrl
+DGMGRL> help switchover
+DGMGRL> SWITCHOVER TO standby_database
+
+sql command
+1.stop delete archivelog on standby  （crontab）
+  p.1change primary to standby
+   SQL> ALTER DATABASE COMMIT TO SWITCHOVER TO STANDBY WITH SESSION SHUTDOWN;
+  p.2 sql>startup mount
+  p.3 sql>ALTER DATABASE RECOVER MANAGED STANDBY DATABASE USING CURRENT LOGFILE  DISCONNECT FROM SESSION;
+  
+  s.1change standby to primary
+  SQL> ALTER DATABASE COMMIT TO SWITCHOVER TO PRIMARY WITH SESSION SHUTDOWN;
+  SQL> ALTER DATABASE OPEN;
+
+sql command failover
+s.1 check log gap
+  SQL> SELECT THREAD#, LOW_SEQUENCE#, HIGH_SEQUENCE# FROM V$ARCHIVE_GAP;
+s.2 stop log apply
+  SQL> ALTER DATABASE RECOVER MANAGED STANDBY DATABASE CANCEL;
+  SQL> ALTER DATABASE RECOVER MANAGED STANDBY DATABASE FINISH FORCE;
+s.3 force active database
+  SQL> ALTER DATABASE ACTIVATE PHYSICAL STANDBY DATABASE;
+  SQL> ALTER DATABASE OPEN;
+

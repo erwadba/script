@@ -1,20 +1,104 @@
-还原过程大致步骤：
-1、还原spfile，适当修改spfile的参数
-restore spfile to '/home/oracle/PROD.ora' from '/vdb/2020_05_11/spfile_19477_1_1040086879';
-2、还原控制文件
-restore controlfile to '/vdb/app/oracle/oradata/control01.ctl' from '/vdb/2020_05_11/cntrl_19475_1_1040086875';
-3、还原数据库
+异机还原oracle过程大致步骤：
+1.还原spfile，还原之后的spfile需要适当修改spfile文件中的参数
+rman启动数据库到nomount阶段
  run {
- SET NEWNAME FOR DATABASE TO '/vdb/app/oracle/oradata/%U';
- restore database from tag='HOT_DB_BK_LEVEL0_2020_05_10';
+  allocate channel ch01 TYPE DISK;
+  restore spfile to '/home/oracle/spfile_xxx.ora' from '<backup file path>';
+  release channel ch01;
+ } 
+2.使用步骤1还原出来的spfile文件来启动数据库，然后执行还原控制文件操作
+ run {
+  allocate channel ch01 TYPE DISK;
+  restore controlfile to '/home/oracle/control01.ctl' from '<backup file path>';
+  release channel ch01;
+ }  
+3.启动数据库到mount状态，还原数据库
+ run {
+ allocate channel ch01 TYPE DISK;
+ SET NEWNAME FOR DATABASE TO '<还原后的数据文件路径>/%U';
+ #restore preview database from tag='<特定日期的backup>';
+ restore database from tag='<特定日期的backup>';
+ release channel ch01;
  }
-4、switch datafile
+ 
+ 注册备份集
+ catalog start with '<备份路径>';
+ preview关键字。
+   
+4.switch datafile
  run {
+ allocate channel ch01 TYPE DISK;
  SET NEWNAME FOR DATABASE TO '/vdb/app/oracle/oradata/%U';
  switch datafile all;
+ release channel ch01;
  }
 
-5、追加增量日志
-recover database;
-6、打开数据库
+5.追加增量日志
+ run {
+ allocate channel ch01 TYPE DISK;
+ SET NEWNAME FOR DATABASE TO '/vdb/app/oracle/oradata/%U';
+ recover database;
+ release channel ch01;
+ }
+ 
+ 注：
+ [oracle@stat ~]$ export NLS_DATE_FORMAT='yyyy-mm-dd hh24:mi:ss'
+ [oracle@stat ~]$ rman target /
+ RMAN> recover database until time '2006-09-14 19:00:00';
+ RMAN> recover database until time "to_date('2011-02-28 16:06:23','YYYY-MM-DD HH24:MI:SS')";
+
+ 跳过部分表空间不恢复
+ RMAN> recover database skip tablespace  TS_CRSP1,TS_OTHER,TS_CRSIM,TS_CRSEX,TS_CORIS,TS_BL,TS_BKG;  #跳过不恢复的表空间
+ 跳过部分pdb不进行恢复(12c)
+ RMAN> recover database skip forever tablespace CFMDB_PRD:SYSTEM,CFMDB_PRD:SYSAUX,CFMDB_PRD:UNDOTBS1,CFMDB_PRD:TS_CFM,CFMDB_PRD:TS_CFM_HIS;
+ 
+6.打开数据库
+alter database open resetlogs;
+
+ 注：
+ 关闭块跟踪 alter database disable block change tracking;  
+
+NBU带库
+1.安装nbu agent，配置带库 Ln -s /usr/openv/netbackup/bin/libobk.so64 /home/oracle/data/oracle/product/11.2.0/dbhome_1/lib/libobk.so
+2.读取带库内容 $ /usr/openv/netbackup/bin/bplist -C xxxhost  -t 4 -R / 
+3.测试带库
+run {
+  allocate channel ch01 TYPE 'SBT_TAPE';
+  release channel ch01;
+  }  
+4.还原spfile，根据需要修改内容
+  run {
+  allocate channel ch01 TYPE 'SBT_TAPE';
+  SEND 'NB_ORA_SERV=nbu_server05,NB_ORA_CLIENT=lxt03_host';
+  restore spfile to '/home/oracle/spfile_xxx.ora' from '/c-173956695-20170609-02';
+  release channel ch01;
+  }  
+5.还原controlfile
+  run {
+  allocate channel ch01 TYPE 'SBT_TAPE';
+  SEND 'NB_ORA_SERV=nbu_server05,NB_ORA_CLIENT=lxt03_host';
+  restore controlfile to '/home/oracle/control01.ctl'  from '/c-173956695-20180609-02';
+  release channel ch01;
+  } 
+6.启动数据库到mount状态，还原数据库
+ run {
+	 ALLOCATE CHANNEL CH00 TYPE 'SBT_TAPE';
+	 ALLOCATE CHANNEL CH01 TYPE 'SBT_TAPE';
+	 SEND 'NB_ORA_SERV=nbu_server05,NB_ORA_CLIENT=lxt03_host';
+	 SET NEWNAME FOR DATABASE TO '+DATA';
+	 #restore preview database;
+	 restore database;
+	 switch datafile all;
+	 }
+7.追加增量日志
+ run {
+   allocate channel ch01 TYPE 'SBT_TAPE';
+   allocate channel ch02 TYPE 'SBT_TAPE';
+   SEND 'NB_ORA_SERV=ntbbkp05,NB_ORA_CLIENT=lxbedirac2';
+   recover database;
+   release channel ch01;
+   release channel ch02;
+   }
+8.打开数据库
+alter database open resetlogs;
 

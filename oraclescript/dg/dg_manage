@@ -1,0 +1,77 @@
+DG的原理
+物理备库：redo块在备库恢复
+逻辑备库：解析出sql语句，然后应用到备库
+
+
+1.查询传输进程    
+SQL> select process,client_process,sequence#,status from v$managed_standby;
+
+PROCESS   CLIENT_P  SEQUENCE# STATUS
+--------- -------- ---------- ------------
+ARCH      ARCH              0 CONNECTED
+ARCH      ARCH              0 CONNECTED
+ARCH      ARCH          13084 CLOSING
+ARCH      ARCH              0 CONNECTED
+MRP0      N/A           29817 APPLYING_LOG
+
+SQL> 
+2.查询备库的状态
+SQL> select inst_id,open_mode,database_role,protection_mode from gv$database;
+
+   INST_ID OPEN_MODE            DATABASE_ROLE    PROTECTION_MODE
+---------- -------------------- ---------------- --------------------
+         1 READ ONLY WITH APPLY PHYSICAL STANDBY MAXIMUM PERFORMANCE
+         2 READ ONLY WITH APPLY PHYSICAL STANDBY MAXIMUM PERFORMANCE
+SQL> 
+SQL> Select recovery_mode from v$archive_dest_status where RECOVERY_MODE<>'IDLE';    --查看日志的应用模式
+RECOVERY_MODE
+-----------------------
+MANAGED REAL TIME APPLY
+SQL> 
+3.查询备库日志应用情况
+SQL> select thread#,sequence#,first_time,next_time,applied from v$archived_log;
+
+   THREAD#  SEQUENCE# FIRST_TIM NEXT_TIME APPLIED
+---------- ---------- --------- --------- ---------
+         2      27776 10-SEP-16 10-SEP-16 YES
+         2      27777 10-SEP-16 10-SEP-16 YES
+         1      12385 10-SEP-16 10-SEP-16 YES
+         2      27775 10-SEP-16 10-SEP-16 YES
+         1      12376 10-SEP-16 10-SEP-16 YES
+         1      12377 10-SEP-16 10-SEP-16 YES
+         1      12375 10-SEP-16 10-SEP-16 YES
+4.查看日志是否出现间隔gap
+SQL> select * from v$archive_gap;
+
+no rows selected
+
+SQL> 
+
+
+
+
+--查看备库日志的应用进度
+select thread#,sequence#,first_time,next_time,applied from v$archived_log;
+   
+--查看数据库状态，是否应用日志         
+select inst_id,open_mode,database_role,protection_mode from gv$database;
+
+--验证主库，备库是否有大的日志间隔。
+1.检查主库的日志的检查点
+Identify the current sequence number for each thread on the primary database
+SQL> SELECT THREAD#, SEQUENCE# FROM V$THREAD;
+2.验证备库的
+Verify the target physical standby database has applied up to, but not including the logs from the primary query. On the standby the following query should be within 1 or 2 of the primary query result.
+备库的日志
+SQL> SELECT THREAD#, MAX(SEQUENCE#) FROM V$ARCHIVED_LOG
+     WHERE APPLIED = 'YES'
+     AND RESETLOGS_CHANGE# = (SELECT RESETLOGS_CHANGE#
+     FROM V$DATABASE_INCARNATION
+     WHERE STATUS = 'CURRENT')
+     GROUP BY THREAD#;
+
+
+备库打开日志应用
+alter database recover managed standby database disconnect from session;       //启动日志应用       
+alter database recover managed standby database cancel;    //取消DG 打开数据库，就可以查询了//查询不同步，同步不查询
+ alter database recover managed standby database using current logfile disconnect from session;   //实时同步

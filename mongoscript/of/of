@@ -1,0 +1,10 @@
+rs.slaveOk();
+#返回大于1000毫秒（1s）慢的操作
+replset:PRIMARY> db.system.profile.find({millis:{$gt:1000}}).sort({millis:-1}).limit(2)    
+replset:PRIMARY> db.system.profile.find({millis:{$gt:1000}}).sort({millis:-1}).limit(2).pretty()
+#查看这个集合上面在的index
+replset:PRIMARY> db.mink1_0155.getIndexes()     
+
+慢查询是否开启
+replset:SECONDARY> db.getProfilingStatus()
+replset:PRIMARY> db.setProfilingLevel(1,200)    --设置级别时间

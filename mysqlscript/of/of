@@ -1,0 +1,2 @@
+#清理master log日志，清理日志前，查看slave库的mysql.worker_slave_info表。  主库自动清理日志的参数：expire_logs_days
+purge binary logs to 'bin-log.000022';

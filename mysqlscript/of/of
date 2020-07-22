@@ -3,4 +3,12 @@ purge binary logs to 'bin-log.000022';
 #查看binlog从某个位置开始的event
 show binlog events in 'bin3306.000012' from  538 limit 10; 
 
-
+查询binglog日志中的大事务i
+1.解析日志
+mysqlbinlog --base64-output=decode-rows -v--start-datetime='2020-07-22 15:50:00' --stop-datetime='2020-07-22 16:05:00' mysql-bin.000017 >sql.log
+2.分析日志
+#查看某个表的dml操作数
+cat relay.sql |egrep "db1|db2"|awk '/###/{if($0~/UPDATE|INSERT|DELETE/)count[$2" "$NF]++}END{for(i in count)print i,"\t",count[i]}'|column -t|sort -k3nr >count1.txt
+#查看last_committed pos之间的差值
+cat relay.sql |grep "GTID$(printf '\t')last_committed" -B 1 | grep -E '^# at' | awk '{print $3}' | awk 'NR==1 {tmp=$1} NR>1 {print "at "tmp,($1-tmp);tmp=$1}'  | sort -k3nr | head -n 10
+cat relay.sql |grep "at <pos>" -A10000|more

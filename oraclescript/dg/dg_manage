@@ -83,3 +83,6 @@ alter database recover managed standby database using current logfile disconnect
 查看日志大小，查看standby日志大小
 select group#,bytes from v$log;
 select group#,bytes from v$standby_log;
+
+在主库创建备库的控制文件
+ALTER DATABASE CREATE standby CONTROLFILE AS '/tmp/controlfs01.ctl';

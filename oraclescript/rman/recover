@@ -57,6 +57,9 @@ alter database open resetlogs;
 
  注：
  关闭块跟踪 alter database disable block change tracking;  
+ 处理redo日志  par: db_create_file_dest
+ alter database rename file '/u01/app/oracle/oradata/ORCL/redo01.log' to '/vdb/app/oracle/oradata/ORCL/redo01.log';
+ alter database clear logfile group 1;
 
 NBU带库
 1.安装nbu agent，配置带库 Ln -s /usr/openv/netbackup/bin/libobk.so64 /home/oracle/data/oracle/product/11.2.0/dbhome_1/lib/libobk.so

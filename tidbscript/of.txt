@@ -1,0 +1,4 @@
+#查看tname所占用的regions
+show table tname regions;
+#显示最近一段时间top 5的慢查询
+admin show slow top 5\G

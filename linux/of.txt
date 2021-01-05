@@ -1,0 +1,19 @@
+1.python共享文件
+使用wget外网下载文件慢，此时为提高效率，搭建临时的文件服务器 
+①提前将文件下载到本地，上传到分发的源IP服务器，和要拉取文件的要连通 
+②在文件所在的目录开启http服务 Python3输入 python -m http.server 9200    Python2输入 python -m SimpleHTTPServer 9200 
+③拉取端使用wget下载文件 wget http://源IP:9200/td-agent-3.4.1-0.el6.x86_64.rpm
+
+
+
+2.Linux 怎样更改locale语言设置
+推荐使用UTF8编码，因为这是国际标准，能兼容任何语言的编码。在CentOS VPS下修改语言编码：
+localedef -c -f UTF-8 -i zh_CN zh_CN.utf8
+export LC_ALL=zh_CN.utf8
+
+上面第一步是用来产生编码文件，这一步不是必须，编码文件一般都存在，运行localedef --help能查看当前编码文件所在的路径。第二步更改当前的编码为zh_CN.utf8，如果要永久更改，运行：
+echo 'LANG=zh_CN.UTF-8' > /etc/sysconfig/i18n
+echo 'LC_ALL=zh_CN.UTF-8' >> /etc/sysconfig/i18n
+
+3.centos调用图像界面需要的包
+[root@10-205-203-95 soft]# yum install xorg-x11-xauth qt-x11 xorg-x11-fonts-Type1 xorg-x11-proto-devel xorg-x11-utils libX11-common libX11-devel xorg-x11-font-utils libX11 

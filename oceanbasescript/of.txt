@@ -36,6 +36,10 @@ mysql -h192.168.1.241 -uobdemo:sys:root -P2883 -prootpwd -c -A oceanbase
 >create tenant obbmsql resource_pool_list=('bmsql_pool'), primary_zone='zone1,zone2,zone3',comment 'oracle tenant/instance', charset='utf8' set ob_tcp_invited_nodes='%', ob_compatibility_mode='oracle';
 >create tenant mysql_tenant resource_pool_list=('bmsql_pool'),primary_zone='zone1,zone2,zone3' set ob_tcp_invited_nodes='%',ob_compatibility_mode='mysql',recyclebin=off, ob_timestamp_service='GTS'
 该处可以指定zone的优先级。指定租户的类型为mysql还是oracle。一旦指定就比较难修改
+zone优先级
+配置1：(z1,z2,z3) 意义：ZONE_1 =ZONE_2 = ZONE_3
+配置2：(z1;z2;z3) 意义：ZONE_1 >ZONE_2 > ZONE_3
+配置3：(z1,z2;z3) 意义：(ZONE_1 = ZONE_2)> ZONE_3
 
 select tenant_id, tenant_name, zone_list, locality ,gmt_modified from oceanbase.__all_tenant;   //查看租户
 
@@ -58,7 +62,40 @@ order by t1.`resource_pool_id`, t2.`unit_config_id`, t3.unit_id;
 select pool.name as pool_name,unit_id, unit_config.name as unit_config_name, svr_ip,status,min_cpu,max_cpu,min_memory/1024/1024/1024 as min_memory_gb,max_memory/1024/1024/1024 as max_memory_gb from __all_resource_pool pool inner join __all_unit unit on pool.resource_pool_id=unit.resource_pool_id inner join __all_unit_config unit_config on pool.unit_config_id=unit_config.unit_config_id order by pool_name,unit_id,svr_ip;
 
 
+常见内存问题：ERROR 4030 (HY000): OB-4030:Over tenant memory limits
+observer日志报错关键字 "alloc memory failed"   "alloc failed"
+# cat observer.log|grep -i  "alloc memory failed"
+判断memstore是否超过上限。total_gb 是否到达mem_limit_gb。表示memstore全部写满
+select /*+ READ_CONSISTENCY(WEAK),query_timeout(100000000) */ TENANT_ID,IP,
+round(ACTIVE/1024/1024/1024,2)ACTIVE_GB,
+round(TOTAL/1024/1024/1024,2) TOTAL_GB,
+round(FREEZE_TRIGGER/1024/1024/1024,2) FREEZE_TRIGGER_GB,
+round(TOTAL/FREEZE_TRIGGER*100,2) percent_trigger,
+round(MEM_LIMIT/1024/1024/1024,2) MEM_LIMIT_GB
+from gv$memstore
+where tenant_id >1000 or TENANT_ID=1
+order by tenant_id,TOTAL_GB desc;
 
+若memstore内存未超限。判断memstore之外的哪个module占用内存空间最高。查看排名靠前的内存模块
+select tenant_id, svr_ip, mod_name, sum(hold) module_sum
+from __all_virtual_memory_info
+where tenant_id>1000 and hold<>0 and
+mod_name not in ('OB_KVSTORE_CACHE', 'OB_MEMSTORE')
+group by tenant_id,svr_ip, mod_name
+order by module_sum desc;
+
+除去memstore和kvcache，查看使用超过一定大小的模块
+select * from gv$memory
+where used > 1024*1024*1024*10
+and CONTEXT not in ('OB_MEMSTORE','OB_KVSTORE_CACHE')
+order by used desc;
+
+查看tenant_id=500的租户内存使用量。（500租户是系统租户，需要单独查询__all_virtual_memory_info）
+select svr_ip,mod_name,sum(hold) system_memory_sum
+from __all_virtual_memory_info
+where tenant_id=500 and hold<>0
+group by svr_ip,mod_name
+order by system_memory_sum desc;
 
 
 

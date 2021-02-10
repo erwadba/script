@@ -1,0 +1,69 @@
+1.查看集群资源各节点的聚合情况
+select zone,concat(svr_ip,':',svr_port) observer, cpu_total,cpu_assigned,cpu_assigned_percent,
+round(mem_total/1024/1024/1024) mem_total_gb, round(mem_assigned/1024/1024/1024) mem_assigned_gb,
+mem_assigned_percent, unit_Num,round(`load`,2) `load`, round(cpu_weight,2) cpu_weight,
+round(memory_weight,2) mem_weight, leader_count
+from __all_virtual_server_stat
+order by zone,svr_ip;
+
+2.定义资源规格(当前版本只对cpu和mem资源限制有效)
+create resource unit S2 max_cpu=20, min_cpu=20, max_memory='40G', min_memory='40G', max_iops=10000,min_iops=1000, max_session_num=1000000, max_disk_size='1024G’;
+
+//查询系统当前的resource unit
+select unit_config_id,name,max_cpu,min_cpu,round(max_memory/1024/1024/1024) max_mem_gb, round(min_memory/1024/1024/1024) min_mem_gb, round(max_disk_size/1024/1024/1024) max_disk_size_gb
+from oceanbase.__all_unit_config
+order by unit_config_id;
+//删除资源规格
+drop  resource unit abcd0_6_B_unit_config;
+
+3、创建资源池
+注意：unit是资源分配的最小单位。同一个uint不能跨越节点。 换句话说，并不一定是整个分布式数据库集群的机器都能为这个租户所用。这个取决于resource pool里的unit_num的数量
+比如，集群中有一个机房有三台机器，要想将三台机器都使用起来，uint_num需要设置为3
+create resource pool pool_demo unit = 'unit_4c20g512g', unit_num = 1, zone_list=('zone1','zone2','zone3');   //若设置为1，表示zone中的其中1台机器上
+
+select resource_pool_id, name,unit_count, unit_config_id, zone_list, tenant_id, gmt_modified
+from oceanbase.__all_resource_pool order by resource_pool_id  ;
+
+drop  resource pool abcd0_6_pool_full;
+
+4、登录到系统租户。创建租户
+{ (连接 [用户名]@[租户名]#[集群名] 或 [集群名]:[租户名]:[用户名])
+mysql -h192.168.1.241 -uroot@sys#obdemo -P2883 -prootpwd -c -A oceanbase   //oceanbase数据库，保存了所有的系统表，访问这个表，需要sys租户
+或
+mysql -h192.168.1.241 -uobdemo:sys:root -P2883 -prootpwd -c -A oceanbase
+}
+>mysql -h192.168.1.241 -uroot@sys#obdemo -P2883 -prootpwd -c -A oceanbase
+>create tenant obbmsql resource_pool_list=('bmsql_pool'), primary_zone='zone1,zone2,zone3',comment 'oracle tenant/instance', charset='utf8' set ob_tcp_invited_nodes='%', ob_compatibility_mode='oracle';
+>create tenant mysql_tenant resource_pool_list=('bmsql_pool'),primary_zone='zone1,zone2,zone3' set ob_tcp_invited_nodes='%',ob_compatibility_mode='mysql',recyclebin=off, ob_timestamp_service='GTS'
+该处可以指定zone的优先级。指定租户的类型为mysql还是oracle。一旦指定就比较难修改
+
+select tenant_id, tenant_name, zone_list, locality ,gmt_modified from oceanbase.__all_tenant;   //查看租户
+
+5、终端查看业务租户可用资源大小
+select zone, sum(cpu_total) - sum(cpu_max_assigned) as 'CPU remaining C', (sum(mem_total) - sum(mem_max_assigned))/1024/1024/1024 as 'Memory remaining G' from __all_virtual_server_stat group by zone;
+
+集群状态相关检查：
+1、集群资源池确认
+select a.zone,concat(a.svr_ip,':',a.svr_port) observer, cpu_total, (cpu_total-cpu_assigned) cpu_free, round(mem_total/1024/1024/1024) mem_total_gb, round((mem_total-mem_assigned)/1024/1024/1024) mem_free_gb, usec_to_time(b.last_offline_time) last_offline_time, usec_to_time(b.start_service_time) start_service_time
+from __all_virtual_server_stat a join __all_server b on (a.svr_ip=b.svr_ip and a.svr_port=b.svr_port)
+order by a.zone, a.svr_ip;
+2、确认资源池使用细节
+select t1.name resource_pool_name, t2.`name` unit_config_name, t2.max_cpu, t2.min_cpu, round(t2.max_memory/1024/1024/1024) max_mem_gb, round(t2.min_memory/1024/1024/1024) min_mem_gb, t3.unit_id, t3.zone, concat(t3.svr_ip,':',t3.`svr_port`) observer,t4.tenant_id, t4.tenant_name
+from __all_resource_pool t1 join __all_unit_config t2 on (t1.unit_config_id=t2.unit_config_id)
+    join __all_unit t3 on (t1.`resource_pool_id` = t3.`resource_pool_id`)
+    left join __all_tenant t4 on (t1.tenant_id=t4.tenant_id)
+order by t1.`resource_pool_id`, t2.`unit_config_id`, t3.unit_id;
+
+6、将(unit_config/unit/resource_pool)关联起来： __all_resource_pool, __all_unit, __all_unit_config
+select pool.name as pool_name,unit_id, unit_config.name as unit_config_name, svr_ip,status,min_cpu,max_cpu,min_memory/1024/1024/1024 as min_memory_gb,max_memory/1024/1024/1024 as max_memory_gb from __all_resource_pool pool inner join __all_unit unit on pool.resource_pool_id=unit.resource_pool_id inner join __all_unit_config unit_config on pool.unit_config_id=unit_config.unit_config_id order by pool_name,unit_id,svr_ip;
+
+
+
+
+
+
+
+
+
+
+

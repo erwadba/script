@@ -3,7 +3,7 @@ purge binary logs to 'bin-log.000022';
 #查看binlog从某个位置开始的event
 show binlog events in 'bin3306.000012' from  538 limit 10; 
 
-查询binglog日志中的大事务i
+查询binglog日志中的大事务
 1.解析日志
 mysqlbinlog --base64-output=decode-rows -v--start-datetime='2020-07-22 15:50:00' --stop-datetime='2020-07-22 16:05:00' mysql-bin.000017 >sql.log
 2.分析日志
@@ -12,3 +12,13 @@ cat relay.sql |egrep "db1|db2"|awk '/###/{if($0~/UPDATE|INSERT|DELETE/)count[$2"
 #查看last_committed pos之间的差值
 cat relay.sql |grep "GTID$(printf '\t')last_committed" -B 1 | grep -E '^# at' | awk '{print $3}' | awk 'NR==1 {tmp=$1} NR>1 {print "at "tmp,($1-tmp);tmp=$1}'  | sort -k3nr | head -n 10
 cat relay.sql |grep "at <pos>" -A10000|more
+
+3.查看当前造成阻塞的会话，正在做什么操作
+show engine innodb status\G
+---TRANSACTION 1413473151, ACTIVE 47982 sec
+mysql tables in use 1, locked 1
+2566 lock struct(s), heap size 319696, 681336 row lock(s), undo log entries 681336
+MySQL thread id 5863, OS thread handle 140197742958336, query id 847170017 Executing event   <<<<<<<<<<<<造成阻塞的会话
+查看当前造成阻塞的会话，正在做什么操作
+例子：
+root@EM-75WSRG2:~# m1 -e "show engine innodb status\G"|grep -A5 -B10 "MySQL thread id "|grep  -A5 -B10 "Executing event"

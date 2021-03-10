@@ -33,9 +33,19 @@ mysql -h192.168.1.241 -uroot@sys#obdemo -P2883 -prootpwd -c -A oceanbase   //oce
 mysql -h192.168.1.241 -uobdemo:sys:root -P2883 -prootpwd -c -A oceanbase
 }
 >mysql -h192.168.1.241 -uroot@sys#obdemo -P2883 -prootpwd -c -A oceanbase
->create tenant obbmsql resource_pool_list=('bmsql_pool'), primary_zone='zone1,zone2,zone3',comment 'oracle tenant/instance', charset='utf8' set ob_tcp_invited_nodes='%', ob_compatibility_mode='oracle';
+>create tenant obbmsql resource_pool_list=('bmsql_pool'),replica_num=3, primary_zone='zone1,zone2,zone3',comment 'oracle tenant/instance', charset='utf8' set ob_tcp_invited_nodes='%', ob_compatibility_mode='oracle';
 >create tenant mysql_tenant resource_pool_list=('bmsql_pool'),primary_zone='zone1,zone2,zone3' set ob_tcp_invited_nodes='%',ob_compatibility_mode='mysql',recyclebin=off, ob_timestamp_service='GTS'
 该处可以指定zone的优先级。指定租户的类型为mysql还是oracle。一旦指定就比较难修改
+resource_pool_list：指定资源池
+replica_num：副本数
+primary_zone：主zone
+comment：注释
+charset：字符集
+ob_tcp_invited_nodes：黑白名单
+ob_compatibility_mode：租户模式
+recyclebin：回收站状态
+ob_timestamp_service
+
 zone优先级
 配置1：(z1,z2,z3) 意义：ZONE_1 =ZONE_2 = ZONE_3
 配置2：(z1;z2;z3) 意义：ZONE_1 >ZONE_2 > ZONE_3

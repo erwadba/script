@@ -8,3 +8,9 @@ replset:PRIMARY> db.mink1_0155.getIndexes()
 慢查询是否开启
 replset:SECONDARY> db.getProfilingStatus()
 replset:PRIMARY> db.setProfilingLevel(1,200)    --设置级别时间
+
+replset:PRIMARY> rs.status()	 --查看副本集状态：	
+replset:PRIMARY> db.getReplicationInfo()     或者 rs.printReplicationInfo()  	--查看副本集oplog大小
+replset:PRIMARY> rs.printSlaveReplicationInfo()     --查看副本集延迟
+查看分片的状态
+mongos> sh.status()    

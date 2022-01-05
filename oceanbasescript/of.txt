@@ -16,6 +16,9 @@ order by unit_config_id;
 //删除资源规格
 drop  resource unit abcd0_6_B_unit_config;
 
+修改uint资源定义
+ALTER RESOURCE UNIT unit1 max_cpu 2, max_memory '2G';
+
 3、创建资源池
 注意：unit是资源分配的最小单位。同一个uint不能跨越节点。 换句话说，并不一定是整个分布式数据库集群的机器都能为这个租户所用。这个取决于resource pool里的unit_num的数量
 比如，集群中有一个机房有三台机器，要想将三台机器都使用起来，uint_num需要设置为3

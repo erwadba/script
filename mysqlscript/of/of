@@ -22,3 +22,165 @@ MySQL thread id 5863, OS thread handle 140197742958336, query id 847170017 Execu
 查看当前造成阻塞的会话，正在做什么操作
 例子：
 root@EM-75WSRG2:~# m1 -e "show engine innodb status\G"|grep -A5 -B10 "MySQL thread id "|grep  -A5 -B10 "Executing event"
+
+
+
+
+查找消耗高的sql
+1.查看当前正在执行的sql。类似oracle的v$session  （缺点，抓取不到存储过程）
+SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED ;
+select user,db,current_statement,last_statement,lock_latency,last_wait,last_statement_latency,full_scan,current_memory,trx_latency,trx_state from  sys.processlist where last_statement_latency is not null and last_statement_latency not like '%us%'  order by  last_statement_latency;
+
+2.按等待时间最多的进行倒排      
+select SCHEMA_NAME,DIGEST_TEXT,SUM_TIMER_WAIT,COUNT_STAR from performance_schema.events_statements_summary_by_digest order by SUM_TIMER_WAIT desc limit 5\G
+SQL扫描的行数最多，说明耗io比较多
+select SCHEMA_NAME,DIGEST_TEXT,COUNT_STAR from performance_schema.events_statements_summary_by_digest order by SUM_ROWS_EXAMINED desc limit 5\G
+没有使用索引的sql语句倒排
+select SCHEMA_NAME,DIGEST_TEXT,COUNT_STAR from performance_schema.events_statements_summary_by_digest order by SUM_NO_INDEX_USED desc limit 5\G 
+按照执行次数倒排
+select SCHEMA_NAME,DIGEST_TEXT,COUNT_STAR from performance_schema.events_statements_summary_by_digest order by COUNT_STAR desc limit 5\G
+排序相关  这个两条sql语句取出来的值差不多。
+select SCHEMA_NAME,DIGEST_TEXT,COUNT_STAR from performance_schema.events_statements_summary_by_digest order by SUM_SORT_ROWS desc limit 5\G
+SQL使用的临时表最多
+mysql> select SCHEMA_NAME,DIGEST_TEXT,COUNT_STAR,SUM_CREATED_TMP_DISK_TABLES,SUM_CREATED_TMP_TABLES from performance_schema.events_statements_summary_by_digest order by SUM_CREATED_TMP_DISK_TABLES desc limit 5\G
+
+3.查找大事务
+SELECT trx_state,trx_started,trx_weight,trx_query,trx_operation_state,trx_rows_locked,trx_rows_modified FROM information_schema.INNODB_TRX where TIMESTAMPDIFF(SECOND, trx_started, now()) > 1 ORDER BY trx_started LIMIT 5;
+慢查询
+select  TIMESTAMPDIFF(SECOND,ifnull(trx_started,now()),now()),trx_query from information_schema.INNODB_TRX order by trx_started limit 1;
+
+4.复制相关
+select * from mysql.slave_worker_info;
+
+SELECT * FROM information_schema.INNODB_TRX\G 
+kill trx_mysql_thread_id
+
+查询正在锁的事务
+SELECT * FROM INFORMATION_SCHEMA.INNODB_LOCKS;
+查询等待锁的事务
+SELECT * FROM INFORMATION_SCHEMA.INNODB_LOCK_WAITS;
+
+SELECT a.lock_table,a.lock_mode,b.trx_state,trx_started,trx_query,CONCAT('kill ',trx_mysql_thread_id) FROM information_schema.innodb_locks a ,information_schema.`INNODB_TRX` b WHERE a.lock_trx_id=b.trx_id;
+
+show engine innodb status\G
+---TRANSACTION 1413473151, ACTIVE 47982 sec
+mysql tables in use 1, locked 1
+2566 lock struct(s), heap size 319696, 681336 row lock(s), undo log entries 681336
+MySQL thread id 5863, OS thread handle 140197742958336, query id 847170017 Executing event   <<<<<<<<<<<<造成阻塞的会话
+查看当前造成阻塞的会话，正在做什么操作
+例子：
+root@EM-75WSRG2:~# m1 -e "show engine innodb status\G"|grep -A5 -B10 "MySQL thread id "|grep  -A5 -B10 "Executing event"
+RW-sx spins 1909933221, rounds 37722370496, OS waits 575931158
+Spin rounds per wait: 4013148946.00 RW-shared, 86545772865.00 RW-excl, 19.75 RW-sx
+------------------------
+LATEST DETECTED DEADLOCK
+------------------------
+2020-11-23 16:02:52 0x7f8698891700
+*** (1) TRANSACTION:
+TRANSACTION 30169540463, ACTIVE 1 sec starting index read
+mysql tables in use 1, locked 1
+LOCK WAIT 4766 lock struct(s), heap size 450768, 5119 row lock(s), undo log entries 5117
+MySQL thread id 163, OS thread handle 140216111134464, query id 71706537539 Executing event  <<<<<<<<<<<<造成阻塞的会话，查看当前造成阻塞的会话，正在做什么操作
+UPDATE `po_zh_info`,`po_cc_sum`
+                SET `dealWinCnt`=po_cc_sum.`hisWinCnt`,`dealfailCnt`=po_cc_sum.`hisFailCnt` WHERE po_zh_info.`zjzh`=po_cc_sum.`zjzh`
+通过查询MySQL thread id 163，发现是复制进程。说明是大事务造成复制延迟。执行的语句就是这个update语句
+root@EM-75WSRG2:~#
+#mysql -e "show engine innodb status\G"|grep -A5 -B10 "MySQL thread id "|grep  -A5 -B10 "Executing event"
+select * from sys.processlist where conn_id=163\G   
+
+mysql> pager cat |grep -A5 -B10 "MySQL thread id "|grep  -A5 -B10 "Executing event"
+mysql> show engine innodb status\G
+
+
+
+
+查询enq-tx锁
+SELECT r.trx_id              waiting_trx_id, 
+        r.trx_mysql_thread_id waiting_thread, 
+        r.trx_query           waiting_query, 
+        b.trx_id              blocking_trx_id, 
+        b.trx_mysql_thread_id blocking_thread, 
+        b.trx_query           blocking_query 
+ FROM   information_schema.innodb_lock_waits w 
+        INNER JOIN information_schema.innodb_trx b 
+                ON b.trx_id = w.blocking_trx_id 
+        INNER JOIN information_schema.innodb_trx r 
+                ON r.trx_id = w.requesting_trx_id\G
+
+
+
+5、查询表创建的时间
+SELECT CREATE_TIME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='codetable' AND TABLE_NAME='$tbname';
+
+
+6、
+不记录事务
+set session sql_log_bin=0
+
+DEMILITER $$
+END$$
+
+查看mysql运行了多长时间
+\s 
+Uptime:	370 days 4 hours 8 min 34 sec
+
+
+查看事务隔离级别
+mysql> SHOW VARIABLES LIKE 'tx_isolation'; 
++---------------+--------------+
+| Variable_name | Value        |
++---------------+--------------+
+| tx_isolation  | SERIALIZABLE |
++---------------+--------------+
+1 row in set (0.00 sec)
+
+mysql> select @@tx_isolation;
++----------------+
+| @@tx_isolation |
++----------------+
+| SERIALIZABLE   |
++----------------+
+1 row in set (0.00 sec)
+
+mysql> 
+
+show variables like '%isolation%';
+
+
+查看数据库中表的情况。如果data_free非常大，说明空洞很大，需要优化，使用analyze table <table> 或 alter table <table> engine=InnoDB
+mysql> show table status from test like 't'\G
+*************************** 1. row ***************************
+           Name: t
+         Engine: InnoDB
+        Version: 10
+     Row_format: Dynamic
+           Rows: 0
+ Avg_row_length: 0
+    Data_length: 16384  -----实际数据
+Max_data_length: 0
+   Index_length: 0
+      Data_free: 0   ----空洞数据
+ Auto_increment: NULL
+    Create_time: 2019-05-21 09:44:21
+    Update_time: 2020-01-10 18:05:19
+     Check_time: NULL
+      Collation: utf8mb4_general_ci
+       Checksum: NULL
+ Create_options: 
+        Comment: 
+1 row in set (0.00 sec)
+
+mysql> 
+
+
+
+show open tables  where in_use>=1;
+
+从processlist找出相关的session进行kill
+select concat("kill ",id,";"),user,COMMAND from information_schema.PROCESSLIST where user='ctapiuser' and host like 'xxx.xx.xx.%' and db=''
+
+
+查看bing某个点后，是否存在event
+mysql> show binlog events in 'mysql-bin.000002' from 417; 
+
+
